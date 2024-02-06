@@ -1,10 +1,13 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:get_it/get_it.dart';
 import 'package:jw_calendar/component/calendar.dart';
 import 'package:jw_calendar/component/schedule_card.dart';
 import 'package:jw_calendar/component/today_banner.dart';
 import 'package:jw_calendar/component/schedule_bottom_sheet.dart';
 import 'package:jw_calendar/const/colors.dart';
+import 'package:jw_calendar/database/drift_database.dart';
+import 'package:jw_calendar/model/schedule_with_color.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -14,7 +17,11 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  DateTime selectedDay = DateTime.now();
+  DateTime selectedDay = DateTime.utc(
+    DateTime.now().year,
+    DateTime.now().month,
+    DateTime.now().day,
+  );
   DateTime focusedDay = DateTime.now();
 
   @override
@@ -34,12 +41,13 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
             TodayBanner(
               selectedDay: selectedDay,
-              scheduleCount: 4,
             ),
             SizedBox(
               height: 8.0,
             ),
-            _ScheduleList(),
+            _ScheduleList(
+              selectedDate: selectedDay,
+            ),
           ],
         ),
       ),
@@ -53,7 +61,9 @@ class _HomeScreenState extends State<HomeScreen> {
           context: context,
           isScrollControlled: true,
           builder: (_) {
-            return ScheduleBottomSheet();
+            return ScheduleBottomSheet(
+              selectedDate: selectedDay,
+            );
           },
         );
       },
@@ -73,7 +83,9 @@ class _HomeScreenState extends State<HomeScreen> {
 }
 
 class _ScheduleList extends StatelessWidget {
-  const _ScheduleList({super.key});
+  final DateTime selectedDate;
+
+  const _ScheduleList({required this.selectedDate, super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -82,21 +94,53 @@ class _ScheduleList extends StatelessWidget {
         padding: const EdgeInsets.symmetric(
           horizontal: 8.0,
         ),
-        child: ListView.separated(
-            itemCount: 10,
-            separatorBuilder: (context, index) {
-              return SizedBox(
-                height: 8.0,
+        child: StreamBuilder<List<ScheduleWithColor>>(
+          stream: GetIt.I<LocalDatabase>().watchSchedule(selectedDate),
+          builder: (context, snapshot) {
+            if (snapshot.hasData == false) {
+              return Center(
+                child: CircularProgressIndicator(),
               );
-            },
-            itemBuilder: (context, index) {
-              return ScheduleCard(
-                startTime: 12,
-                endTime: 14,
-                content: '프로그래밍공부. $index',
-                color: Colors.red,
+            }
+
+            if (snapshot.hasData && snapshot.data!.isEmpty) {
+              return Center(
+                child: Text('스케줄이 없습니다'),
               );
-            }),
+            }
+
+            return ListView.separated(
+              itemCount: snapshot.data!.length,
+              separatorBuilder: (context, index) {
+                return SizedBox(
+                  height: 8.0,
+                );
+              },
+              itemBuilder: (context, index) {
+                final scheduleWithColor = snapshot.data![index];
+
+                return Dismissible(
+                  key: ObjectKey(scheduleWithColor.schedule.id),
+                  direction: DismissDirection.endToStart,
+                  onDismissed: (DismissDirection direction) {
+                    GetIt.I<LocalDatabase>().removeSchedule(scheduleWithColor.schedule.id);
+                  },
+                  child: ScheduleCard(
+                    startTime: scheduleWithColor.schedule.startTime,
+                    endTime: scheduleWithColor.schedule.endTime,
+                    content: scheduleWithColor.schedule.content,
+                    color: Color(
+                      int.parse(
+                        'FF${scheduleWithColor.categoryColor.hexCode}',
+                        radix: 16,
+                      ),
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        ),
       ),
     );
   }
