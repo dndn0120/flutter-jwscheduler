@@ -37,10 +37,8 @@ void main() async {
     }
   }
 
-  print('---------GET COLORS======');
-  print(await database.getCategoryColors());
-
   runApp(MaterialApp(
+    debugShowCheckedModeBanner: false,
     theme: ThemeData(
       fontFamily: 'NotoSans',
     ),
